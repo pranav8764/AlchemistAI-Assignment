@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeJsonDiff } from '../logic/jsonDiff';
+import { computeJsonDiff, buildDiffPathSet } from '../logic/jsonDiff';
 
 describe('computeJsonDiff', () => {
   it('detects added keys', () => {
@@ -98,5 +98,43 @@ describe('computeJsonDiff', () => {
     expect(types.get('add')).toBe('added');
     expect(types.get('change')).toBe('changed');
     expect(types.has('keep')).toBe(false); // unchanged = no entry
+  });
+});
+
+
+describe('buildDiffPathSet', () => {
+  it('marks collapsed array items and preserves bracket notation for ancestors', () => {
+    const diffs = computeJsonDiff(
+      { items: [{ details: { value: 'old' } }] },
+      { items: [{ details: { value: 'new' } }] }
+    );
+    const paths = buildDiffPathSet(diffs);
+    expect(paths.get('items')).toBe('changed');
+    expect(paths.get('items[0]')).toBe('changed');
+    expect(paths.get('items[0].details')).toBe('changed');
+    expect(paths.get('items[0].details.value')).toBe('changed');
+    expect(paths.has('items.0')).toBe(false);
+  });
+
+  it('marks nested root arrays without making numeric object keys into indexes', () => {
+    const paths = buildDiffPathSet([
+      { path: '[0][1].value', type: 'added', newValue: 1 },
+      { path: 'record.0.value', type: 'removed', oldValue: 1 },
+    ]);
+    expect(paths.get('[0]')).toBe('changed');
+    expect(paths.get('[0][1]')).toBe('changed');
+    expect(paths.get('[0][1].value')).toBe('added');
+    expect(paths.get('record.0')).toBe('changed');
+    expect(paths.has('record[0]')).toBe(false);
+  });
+
+  it('preserves explicit diff types when descendants also change', () => {
+    const paths = buildDiffPathSet([
+      { path: 'items[0]', type: 'added', newValue: { value: 1 } },
+      { path: 'items[0].value', type: 'changed', oldValue: 0, newValue: 1 },
+    ]);
+    expect(paths.get('items[0]')).toBe('added');
+    expect(paths.get('items')).toBe('changed');
+    expect(buildDiffPathSet([]).size).toBe(0);
   });
 });
