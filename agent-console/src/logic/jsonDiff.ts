@@ -120,10 +120,11 @@ export function buildDiffPathSet(diffs: JsonDiff[]): Map<string, JsonDiff['type'
   for (const diff of diffs) {
     pathMap.set(diff.path, diff.type);
     // Also mark parent paths so the tree knows to show indicators
-    const parts = diff.path.split(/[.[\]]+/).filter(Boolean);
-    let parentPath = '';
-    for (const part of parts) {
-      parentPath = parentPath ? `${parentPath}.${part}` : part;
+    // Keep each prefix exactly as the tree renders it: items[0], not items.0.
+    // Slicing the original path also keeps numeric object keys as dot segments.
+    const segments = diff.path.matchAll(/[^.[\]]+|\[\d+\]/g);
+    for (const segment of segments) {
+      const parentPath = diff.path.slice(0, segment.index! + segment[0].length);
       if (!pathMap.has(parentPath)) {
         pathMap.set(parentPath, 'changed'); // parent contains changes
       }
